@@ -1,0 +1,411 @@
+;; Space Invaders
+
+;; 1. Características dos elementos do jogo - Elementos Físicos do Jogo
+
+;; OBS: Não esquecer de colocar os testes
+
+(require 2htdp/image)
+(require 2htdp/universe)
+
+(define TIMEROW1 1)
+(define TIMEROW2 2)
+(define TIMEROW3 2)
+(define TIMEROW4 2)
+(define TIMEROW5 5)
+
+(define ZERO 0)
+(define ONE 1)
+(define TWO 2)
+
+(define TEXT-SIZE 30) ;; Tamanho do texto - mudar a fonte depois para torná-la mais agradável esteticamente
+
+;;(define CANVAS-WIDTH  (* 2 COL-NUM-INVADER INVADER-LENGTH)) ;; Tem que ser alterado para se adaptar ao meu jogo - representa a largura da margem na qual serão colocados as naves inimigas.
+(define CANVAS-HEIGHT 600) ;; Altura da margem da cena na qual serão colocados os inimigos - adaptar de acordo com a largura das imagens. Ex: (image-width ENEMYROW1) = 97
+(define WIDTH 700)
+(define HEIGHT 700)
+
+;; 1.1) Elementos da tela de jogo: background, player, enemies, missiles:
+
+(define GAMEOVER . ) ;; Mensagem de "Game Over" na tela. -- Comando GAMEOVER
+(define PRESSSTART (scale 0.3 .)) ;;
+(define BACKGROUND (rectangle WIDTH HEIGHT "solid" "black"))
+(define ENEMYMISSILE (circle 3 "solid" "red")) ;; Míssil lançado pelos inimigos.
+(define MYMISSILE (circle 3 "solid" "green")) ;; Míssil lançado pelo jogador.
+(define FINALMISSILE (circle 5 "solid" "purple")) ;; Missil lançado pela nave final
+(define SPACESHIP-MODEL(scale 0.4 .)) ;; Imagem molde para a nave do jogador.
+(define ENEMYROW1 (scale 0.35 .)) ;; Inimigos da primeira fileira. Ideia: Colocar um X-Fighter ??
+(define ENEMYROW2 (scale 0.3 .)) ;; Inimigos da segunda fileira.
+(define ENEMYROW3(scale 0.08 .) );; Inimigos da terceira fileira.
+(define ENEMYROW4 (scale 0.3 .)) ;; Inimigos da quarta fileira.
+(define ENEMYROW5 (scale 0.35 .)) ;; Inimigos da quinta fileira.
+(define FINALENEMY (scale 0.35 .)) ;; Nave final.
+(define FINALENEMY2 (scale 0.3 .)) ;; Naves finais que orbitam em torno da nave final.
+
+;; 1.2) Elementos do jogo - lives dos enemies, spaceship, scores, level e time.
+
+(define SPACESHIP-INITIAL-DIR 'left) ;; Direção inicial de deslocamemnto da nave
+(define SCORE-HIT-INVADER 10) ;;Pontos por acertar o inimigo
+(define MAX-LIVES-SPACESHIP 2)
+(define MIN-LIVES-SPACESHIP 0)
+(define MAX-LIVES-ENEMYROW1 1)
+(define MAX-LIVES-ENEMYROW2 2)
+(define MAX-LVES-ENEMYROW3 2)
+(define MAX-LVES-ENEMYROW4 2)
+(define MAX-LVES-ENEMYROW5 3)
+(define MAX-LVES-FINALENEMY 5)
+(define MIN-LIVES-ENEMY 0)
+(define TOP-LEFT (make-posn 20 20)) ;; Distância em relação à margem esquerda (?)
+(define ENEMY-PER-LINE 7) ;; Número de inimigos por linha
+(define NUM-COLUMN 5) ;; Número de colunas
+(define GAME-CLOCK 180);; - Contador do tempo: 3 minutos para chegar ao final enemy.
+(define CLOCK-ROW1 1) ;; - Tempo para com que os inimigos da primeira linha morrem - deve ser o menor tempo de todos
+(define CLOCK-ROW2 2)
+(define CLOCL-ROW3 2)
+(define CLOCK-ROW4 2)
+(define CLOCK-ROW5 3)
+(define SCORE-PLAYER 10) ;; - Pontuação do jogador
+(define LEVEL 1) ;; - Mostra o level atual
+(define LIVES-PLAYER 2) ;; - Contador para mostrar o número de vidas que o jogador ainda tem
+
+
+;; Revisado (23 de outubro de 2018)
+
+
+;; Estados finais após uma partida, level ou final do jogo.
+
+(define (fun-gameover image1 image2) ;; Função que faz o overlay quando o jogador perde.
+  (overlay image1 image2))
+
+(define (fun-youwin image1 image2) ;; Função que faz o overlay quando o jogador vence ao final. (YOUWIN / BACKGROUND)
+  (overlay image1 image2))
+
+(define (fun-finalenemy image1 image2 image3) ;; Função que faz o overlay quando o jogador chega ao FINAL ENEMY (FINALENEMY2 / FINALENEMY / BACKGROUND)
+  (overlay image1 (overlay image2 image3)))
+
+(define (fun-nextlevel image1 image2) ;; Função que faz o overlay de quando o jogador passa de level. (NEXTLEVEL / BACKGROUND)
+  (overlay image1 image2))
+
+;; Elementos da mecânica do jogo
+
+(define-struct mymissile [position velocity])
+(define-struct enemymissile [position velocity])
+(define-struct spaceship [position direction life])
+(define-struct enemy [position velocity time life]) ;; A vida de cada invasor aumenta conforme aumenta a dificuldade ;;(define-struct second-enemy [position velocity time life])
+(define-struct final-enemy [position life time])
+(define-struct world [invaders spaceships enemy-bullets spaceship-bullets score lives time]) ;; Elementos do mundo
+
+
+
+#|(define (dir-player direction)
+  (cond
+    [(symbol=?) 'right]
+    [(symbol=?) 'left]))|#
+
+;; A) Escrevendo o primeiro ENEMY de uma fileira em função da abcissa x inicialmente e, depois, em função da ordenada y se necessário
+
+(define (primero-enemy-x cols)
+  ((/ (- CANVAS-WIDTH (* (- cols ONE) TWO INVADER-LENGTH)) TWO))) ;; Tem que ser alterado - voltar ao início do programa em CANVAS-WIDTH etc
+
+
+
+(define (invader-cons-col x y cols)
+  (cond
+    [(= cols ZERO)	empty]
+    [else (cons 
+           (make-posn x y) 
+           (invader-cons-col 
+            (+ x (* TWO INVADER-LENGTH)) y (- cols ONE)))]))
+
+  
+(define (invader-cons-row y rows cols)
+  (cond
+    [(= rows ZERO) empty]
+    [else (append 
+           (invader-cons-col 
+            (first-x cols) y cols) 
+           (invader-cons-row 
+            (+ y INVADER-LENGTH GAP-BETWEEN-ROWS) 
+            (- rows ONE)
+            cols))]))
+
+(define BOTTOM-RIGHT-CORNER (make-posn (- CANVAS-WIDTH  30)
+                                       (- CANVAS-HEIGHT 30)))
+
+;; B) Vidas do jogador
+
+(define (draw-lives spaceship img)
+  (place-image
+   (text (number->string (spaceship-lives spaceship)) TEXT-SIZE "red")
+   (posn-x BOTTOM-RIGHT-CORNER)
+   (posn-y BOTTOM-RIGHT-CORNER)
+   img))
+
+
+(define TOP-CENTER (make-posn (/ CANVAS-WIDTH 2) 15))
+
+;; C) Score do jogo:
+
+(define (draw-score score img)
+  (place-image
+   (text (number->string score) TEXT-SIZE "white")
+   (posn-x TOP-CENTER)
+   (posn-y TOP-CENTER)
+   img))
+
+;;;; Tests
+(check-expect (draw-score 10 BACKGROUND)
+              (place-image (text "10" TEXT-SIZE "black")
+                           (posn-x TOP-CENTER)
+                           (posn-y TOP-CENTER)
+                           BACKGROUND))
+
+
+;;;; Tests
+(check-expect (draw-lives SPACESHIP-DEAD BACKGROUND)
+              (place-image
+               (text "0" TEXT-SIZE "red")
+               (posn-x BOTTOM-RIGHT-CORNER)
+               (posn-y BOTTOM-RIGHT-CORNER)
+               BACKGROUND))
+
+
+;;;; Signature
+;; draw-lopsn: LoP Image Image -> Image
+
+;;;; Purpose
+;; GIVEN: a list of posns, a base image to be placed on
+;;        and a shape image representing an item we are about to draw
+;; RETURNS: an image with all items drawn on the base image
+
+(define (draw-lopsn posns base-img shape-img)
+  (local (
+          ;;;; draw-posn: Posn Image -> Image
+          (define (draw-posn posn image)
+            (place-image 
+             shape-img
+             (posn-x posn)
+             (posn-y posn)
+             image)))
+    (foldl draw-posn base-img posns)))
+
+;;;; Tests
+(check-expect (draw-lopsn INVADERS-1 BACKGROUND INVADER-RECT)
+              (place-image INVADER-RECT 50 40
+                           (place-image INVADER-RECT 250 50 BACKGROUND)))
+
+
+;;;; Signature
+;; draw-invaders: LoF<Invader> Image -> Image
+
+;;;; Purpose
+;; GIVEN: a list of invaders and an image
+;; RETURNS: a new image with the invaders on the given image
+
+(define (draw-invaders invaders img)
+  (draw-lopsn invaders img INVADER-RECT))
+
+;;;; Tests
+(check-expect (draw-invaders INVADERS-1 BACKGROUND)
+              (place-image INVADER-RECT 50 40
+                           (place-image INVADER-RECT 250 50 BACKGROUND)))
+
+;;;; Signature
+;; draw-spaceship: Spaceship Image -> Image
+
+;;;; Purpose
+;; GIVEN: a spaceship and an image
+;; RETURNS: a new image that draws the spaceship on the given image 
+
+(define (draw-spaceship spaceship img)
+  (place-image
+   SPACESHIP-RECT
+   (posn-x (spaceship-position spaceship))
+   (posn-y (spaceship-position spaceship))
+   img))
+
+;;;; Tests
+(check-expect (draw-spaceship SPACESHIP-INIT BACKGROUND)
+              (place-image SPACESHIP-RECT 
+                           (/ CANVAS-WIDTH 2)
+                           (- CANVAS-HEIGHT 20)
+                           BACKGROUND))
+
+;;;; Signature
+;; draw-mothership: Spaceship Image -> Image
+
+;;;; Purpose
+;; GIVEN: a mothership and an image
+;; RETURNS: a new image with the mothership drawn on the given image
+
+(define (draw-mothership mothership img)
+  (place-image
+   MSHIP-RECT
+   (posn-x (spaceship-position mothership))
+   (posn-y (spaceship-position mothership))
+   img))
+
+;;;; Tests
+(check-expect (draw-mothership MSHIP-INIT BACKGROUND)
+              (place-image
+               MSHIP-RECT
+               (posn-x TOP-LEFT)
+               (posn-y TOP-LEFT)
+               BACKGROUND))
+
+;;;; Signature
+;; draw-sbullets: SBullets Image -> Image
+
+;;;; Purpose
+;; GIVEN: a list of spaceship bullets and an image
+;; RETURNS: a new image that draws the list of 
+;;          spaceship bullets on the given image
+
+(define (draw-sbullets sbullets img)
+  (draw-lopsn sbullets img BULLET-RED))
+
+;;;; Tests
+(check-expect (draw-sbullets LoPSN-1 BACKGROUND)
+              (place-image BULLET-RED 50 100
+                           (place-image BULLET-RED 50 200 BACKGROUND)))
+
+
+;;;; Signature
+;; draw-ibullets: IBullets Image -> Image
+
+;;;; Purpose
+;; GIVEN: a list of invader bullets and an image
+;; RETURNS: a new image that draws the list of 
+;;          invader bullets on the given image
+
+(define (draw-ibullets ibullets img)
+  (draw-lopsn ibullets img BULLET-BLK))
+
+;;;; Tests
+(check-expect (draw-ibullets LoPSN-1 BACKGROUND)
+              (place-image BULLET-BLK 50 100
+                           (place-image BULLET-BLK 50 200 BACKGROUND)))
+
+
+
+;;;; Signature
+;; draw-world : World -> Image
+
+;;;; Purpose
+;; GIVEN: a world 
+;; RETURNS: an image representation of the given world 
+
+(define (draw-world world)
+  (draw-invaders (world-invaders world)
+    (draw-spaceship (world-spaceship world)
+      (draw-sbullets (world-sbullets world) 
+        (draw-ibullets (world-ibullets world) 
+          (draw-lives (world-spaceship world)
+            (draw-score (world-score world)
+              (if (= ZERO (spaceship-lives (world-mothership world)))
+                  BACKGROUND
+                  (draw-mothership (world-mothership world) 
+                                    BACKGROUND)))))))))
+
+;;;; Tests
+(check-expect (draw-world WORLD-TEST-DRAW-MSHIP-INIT)
+  (place-image INVADER-RECT 50 100
+    (place-image SPACESHIP-RECT 300 10
+      (place-image BULLET-RED 50 40
+        (place-image BULLET-BLK 250 50 
+          (place-image
+           (text "1" 28 "red")
+           (posn-x BOTTOM-RIGHT-CORNER)
+           (posn-y BOTTOM-RIGHT-CORNER)
+              (place-image
+                (text "0" 28 "black")
+                (posn-x TOP-CENTER)
+                (posn-y TOP-CENTER)
+                BACKGROUND)))))))
+
+(check-expect (draw-world WORLD-TEST-DRAW-MSHIP-APPEAR)
+  (place-image INVADER-RECT 50 100
+    (place-image SPACESHIP-RECT 300 10
+      (place-image BULLET-RED 50 40
+        (place-image BULLET-BLK 250 50 
+          (place-image
+            (text "1" 28 "red")
+            (posn-x BOTTOM-RIGHT-CORNER)
+            (posn-y BOTTOM-RIGHT-CORNER)
+              (place-image
+                (text "0" 28 "black")
+                (posn-x TOP-CENTER)
+                (posn-y TOP-CENTER)
+                  (place-image 
+                   MSHIP-RECT
+                  (posn-x TOP-LEFT)
+                  (posn-y TOP-LEFT)
+                   BACKGROUND))))))))
+;;;; Signature
+;; spaceship-reach-left-corner?: Spaceship -> Boolean
+
+;;;; Purpose
+;; GIVEN: a spaceship
+;; RETURNS: true if the spaceship reaches the left corner, false otherwise
+
+(define (spaceship-reach-left-corner? spaceship)
+  (<= (- (posn-x (spaceship-position spaceship)) (/ SPACESHIP-L TWO)) ZERO))
+
+;;;; Tests
+(check-expect 
+ (spaceship-reach-left-corner? 
+  (make-spaceship (make-posn 15 200) 'left MAX-LIVES-MSHIP)) #true)
+(check-expect 
+ (spaceship-reach-left-corner? 
+  (make-spaceship (make-posn (+ 15 1) 200) 'left MAX-LIVES-MSHIP)) #false)
+
+;;;; Signature
+;; spaceship-reach-right-corner?: Spaceship -> Boolean
+
+;;;; Purpose
+;; GIVEN: a spaceship
+;; RETURNS: true if the spaceship reaches the right corner, false otherwise
+
+(define (spaceship-reach-right-corner? spaceship)
+  (>= (+ (posn-x (spaceship-position spaceship)) (/ SPACESHIP-L TWO)) 
+      CANVAS-WIDTH))
+
+;;;; Tests
+(check-expect 
+ (spaceship-reach-right-corner? 
+  (make-spaceship (make-posn (- 450 15) 200) 'left MAX-LIVES-MSHIP)) #true)
+(check-expect 
+ (spaceship-reach-right-corner? 
+  (make-spaceship (make-posn (- 450 15 1) 200) 'left MAX-LIVES-MSHIP)) #false)
+
+
+;;;; Signature
+;; spaceship-reach-corner?: Spaceship -> Boolean
+
+;;;; Purpose
+;; GIVEN: a spaceship
+;; RETURNS: true if the spaceship reaches the left or right corner, 
+;;          false otherwise
+
+(define (spaceship-reach-left-corner? spaceship) ;; Determina se a nave chega até o extremo esquerdo
+  (<= (- (posn-x (spaceship-position spaceship)) (/ SPACESHIP-L TWO)) ZERO))
+
+
+(define (spaceship-reach-right-corner? spaceship) ;; Determina se a nave chega até o extremo direito
+  (<= (+ (posn-x (spaceship-position spaceship))(/ SPACESHIP-L TWO)) CANVAS-WIDTH))
+
+(define (move-spaceship spaceship)
+  (cond
+    [(spaceship-reach-corner? spaceship)  spaceship]
+    [(symbol=? (spaceship-direction spaceship) 'left)
+     (make-spaceship
+      (make-posn (- (posn-x (spaceship-position spaceship)) SSHIP-MOVE-UNIT)
+                 (posn-y (spaceship-position spaceship)))
+      'left
+      (spaceship-lives spaceship))]
+    [(symbol=? (spaceship-direction spaceship) 'right)
+     (make-spaceship
+      (make-posn (+ (posn-x (spaceship-position spaceship)) SSHIP-MOVE-UNIT)
+                 (posn-y (spaceship-position spaceship)))
+      'right
+      (spaceship-lives spaceship))]))
+
