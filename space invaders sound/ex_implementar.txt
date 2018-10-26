@@ -1,0 +1,7 @@
+#lang racket
+(require racket/gui)
+
+(define (PLAYER-DEATH spaceship-lives)
+  (if (= ZERO spaceship-live)
+      (play-sound "/Users/drago/Desktop/space invaders sound/player_death" #t) ;;Substituir pelo path no seu pc
+ ))
